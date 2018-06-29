@@ -26,7 +26,7 @@ You're reading it! Below I describe how I addressed each rubric point and where 
 
 ### Explain the Starter Code
 
-#### 1. Explain the functionality of what's provided in `motion_planning.py` and `planning_utils.py`
+#### 2. Explain the functionality of what's provided in `motion_planning.py` and `planning_utils.py`
 These scripts contain a basic planning implementation that includes...
 
 And here's a lovely image of my results (ok this image has nothing to do with it, but it's a nice example of how to include images in your writeup!)
@@ -38,6 +38,21 @@ Here's | A | Snappy | Table
 2 | a | b | c
 3 | *italic* | text | 403
 4 | 2 | 3 | abcd
+
+##### 2.1 `planning_utils.py`
+
+Function | Functionality
+-------- | ---------------
+`create_grid`  | creating a grid that represent the 2D map of the environment, with each cell being 0 if it is safe to move to the cell or 1 if there is an obstacle in or next to the cell 
+`valid_action` | returning the set of valid actions to take in each of the cell in the grid, i.e. the set of moves that move the drone into a safe cell rather than an unsafe cell 
+`a_star` | using A\* search to find the shortest safe path from a starting point to a goal 
+`heuristic` | return the heuristic function that is used in A\* search to estimate the distance towards the goal (here we use Euclidean distance) 
+
+##### 2.2 `motion_planning.py` 
+
+Functions | Functionality
+--------- | -------------
+aa | aa
 
 ### Implementing Your Path Planning Algorithm
 
@@ -74,7 +89,7 @@ For this step you can use a collinearity test or ray tracing method like Bresenh
 It works!
 
 ### Double check that you've met specifications for each of the [rubric](https://review.udacity.com/#!/rubrics/1534/view) points.
-  
+
 # Extra Challenges: Real World Planning
 
 For an extra challenge, consider implementing some of the techniques described in the "Real World Planning" lesson. You could try implementing a vehicle model to take dynamic constraints into account, or implement a replanning method to invoke if you get off course or encounter unexpected obstacles.
