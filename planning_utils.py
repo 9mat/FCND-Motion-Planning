@@ -58,14 +58,14 @@ def a_star(grid, h, start, goal):
     # g-score
     cost = {start: 0}
 
-    # 8 directions to move
-    dx = [0, 0, 1, 1, 1, -1, -1, -1]
-    dy = [1, -1, 0, 1, -1, 0, 1, -1]
+    # 16 directions to move (king moves + knight moves)
+    dx = [0, 0, 1, 1, 1, -1, -1, -1, 1, 1, -1, -1, 2, 2, -2, -2]
+    dy = [1, -1, 0, 1, -1, 0, 1, -1, 2, -2, 2, -2, 1, -1, 1, -1]
     
     while not queue.empty():
         _, current_node = queue.get()
             
-        # backtracking
+        # backtracking if goal is reached
         if current_node == goal:        
             print('Found a path.')
             path = []
@@ -78,9 +78,8 @@ def a_star(grid, h, start, goal):
         visited.add(current_node)
 
         # exploring
-        for direction in range(8):
-            x, y = current_node[0] + dx[direction], current_node[1] + dy[direction]
-            next_node = (x,y)
+        for _dx, _dy in zip(dx, dy):
+            x, y = next_node = current_node[0] + _dx, current_node[1] + _dy
 
             # ignore if node in closed set, or out of bounds, or not safe
             if next_node in visited or x < 0 or y < 0 or x >= n or y >= m or grid[x, y] == 1:

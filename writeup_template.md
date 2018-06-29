@@ -27,19 +27,9 @@ You're reading it! Below I describe how I addressed each rubric point and where 
 ### Explain the Starter Code
 
 #### 2. Explain the functionality of what's provided in `motion_planning.py` and `planning_utils.py`
-These scripts contain a basic planning implementation that includes...
-
-And here's a lovely image of my results (ok this image has nothing to do with it, but it's a nice example of how to include images in your writeup!)
-![Top Down View](./misc/high_up.png)
-
-Here's | A | Snappy | Table
---- | --- | --- | ---
-1 | `highlight` | **bold** | 7.41
-2 | a | b | c
-3 | *italic* | text | 403
-4 | 2 | 3 | abcd
-
 ##### 2.1 `planning_utils.py`
+
+This script helps define several helper functions (creating grid, A\* search for shortest path) that will be used in `motion_planning.py`, specially the function `MotionPlanning.plan_path`
 
 Function | Functionality
 -------- | ---------------
@@ -50,37 +40,160 @@ Function | Functionality
 
 ##### 2.2 `motion_planning.py` 
 
+This script defines all the necessary callbacks and transitions for piloting the drones through the waypoints.
+
 Functions | Functionality
 --------- | -------------
-aa | aa
+`MotionPlanning.__init__` | Initializing the waypoints, the drone status and registering the callbacks 
+`MotionPlanning.local_position_callback` | Defining the callback when receiving a new position message:  either transitioning to waypoints if just finishing taking off, or continuing the waypoints if the drone is following the waypoints and not yet reaching the final waypoint, or transitioning to landing otherwise 
+`MotionPlanning.velocity_callback` | Defining the callback when receiving a new velocity message: if the drone is landing and about to hit the ground, transitioning to disarming 
+`MotionPlanning.state_callback` | Defining the callback when receiving a new state message: transitioning to the appropriate states 
+`MotionPlanning.arming_transition` | Defining the transition to arming state: start the drone and let the program take control of the pilot 
+`MotionPlanning.takeoff_transition` | Defining the transition to takeoff state: set the target altitude to the altitude of the first point on the waypoint 
+`MotionPlanning.waypoint_transition` | Defining the transition to and during waypoint state: set the target to the next waypoint 
+`MotionPlanning.landing_transition` | Defining the transition to landing state 
+`MotionPlanning.disarming_transition` | Defining the transition to disarming state 
+`MotionPlanning.manual_transition` | Defining the transition to manual state 
+`MotionPlanning.send_waypoints` | helper function used by `plan_path` to send the waypoints to the simulator for visualization of the path 
+`MotionPlanning.plan_path` | preparing the waypoints: 1. read the data from `collider.csv`, then set up the grid, then use A\* search to find the best path 
+ |  
 
 ### Implementing Your Path Planning Algorithm
 
 #### 1. Set your global home position
-Here students should read the first line of the csv file, extract lat0 and lon0 as floating point values and use the self.set_home_position() method to set global home. Explain briefly how you accomplished this in your code.
 
+Open and read the first line of the file `colliders.csv`. Split the line at the comma to separate the latitude and the longitude fields. Use `set_home_position` to set the global home position with the given coordinates.
 
-And here is a lovely picture of our downtown San Francisco environment from above!
-![Map of SF](./misc/map.png)
+```python
+        # TODO: read lat0, lon0 from colliders into floating point values
+        with open('colliders.csv', 'r') as inputfile:
+            fields = inputfile.read().strip().split(",")
+            lat0 = float(fields[0].split()[1])
+            lon0 = float(fields[1].split()[1])
+
+        # TODO: set home position to (lon0, lat0, 0)
+        self.set_home_position(lon0, lat0, 0)
+```
 
 #### 2. Set your current local position
-Here as long as you successfully determine your local position relative to global home you'll be all set. Explain briefly how you accomplished this in your code.
+Obtain the current global position from `_longitude` and `_latitude` attributes of the drone, and pass them through the function `global_to_local` to get the current local position.
 
-
-Meanwhile, here's a picture of me flying through the trees!
-![Forest Flying](./misc/in_the_trees.png)
+```python
+        # TODO: retrieve current global position
+        global_position = (self._longitude, self._latitude, self._altitude)
+ 
+        # TODO: convert to current local position using global_to_local()
+        local_position = global_to_local(global_position, self.global_home)
+```
 
 #### 3. Set grid start position from local position
-This is another step in adding flexibility to the start location. As long as it works you're good to go!
+
+Convert the local position to the grid start position by offsetting the local position with the grid offsets and round them down to the nearest integers.
+
+```python
+        # TODO: convert start position to current position rather than map center
+        grid_start = (int(local_position[0]-north_offset), int(local_position[1]-east_offset))
+```
 
 #### 4. Set grid goal position from geodetic coords
-This step is to add flexibility to the desired goal location. Should be able to choose any (lat, lon) within the map and have it rendered to a goal location on the grid.
+First convert the global goal geodetic coordinates to the local goal position using the `global_to_local` function, and then offsetting the resulted local goal position with the grid offsets to obtain the grid goal position.
+
+```python
+        # TODO: adapt to set goal as latitude / longitude position and convert
+        global_goal = (-122.39400598, 37.79696888, 0)
+        local_goal = global_to_local(global_goal, self.global_home)
+        grid_goal = (int(local_goal[0]-north_offset), int(local_goal[1] - east_offset))
+```
 
 #### 5. Modify A* to include diagonal motion (or replace A* altogether)
-Minimal requirement here is to modify the code in planning_utils() to update the A* implementation to include diagonal motions on the grid that have a cost of sqrt(2), but more creative solutions are welcome. Explain the code you used to accomplish this step.
+I use 16 moves on the grids (8 king's moves and 8 knight moves) to approximate the possible state transitions of the drone.
+
+```python
+    # 16 directions to move (king moves + knight moves)
+    dx = [0, 0, 1, 1, 1, -1, -1, -1, 1, 1, -1, -1, 2, 2, -2, -2]
+    dy = [1, -1, 0, 1, -1, 0, 1, -1, 2, -2, 2, -2, 1, -1, 1, -1]
+```
+
+I cleaned up the A\* search code a bit and use the Euclidean distance as both the true cost and the heuristic cost of the path
+
+```python
+def a_star(grid, h, start, goal):
+
+    n, m = grid.shape[0] - 1, grid.shape[1] - 1
+
+    # open set
+    queue = PriorityQueue()
+    queue.put((0, start))
+
+    # backtracking cache
+    came_from = {start: None}
+
+    # closed set
+    visited = {start}
+
+    # g-score
+    cost = {start: 0}
+
+    # 16 directions to move (king moves + knight moves)
+    dx = [0, 0, 1, 1, 1, -1, -1, -1, 1, 1, -1, -1, 2, 2, -2, -2]
+    dy = [1, -1, 0, 1, -1, 0, 1, -1, 2, -2, 2, -2, 1, -1, 1, -1]
+    
+    while not queue.empty():
+        _, current_node = queue.get()
+            
+        # backtracking if goal is reached
+        if current_node == goal:        
+            print('Found a path.')
+            path = []
+            while current_node is not None:
+                path.append(current_node)
+                current_node = came_from[current_node]
+            return path[::-1], cost[goal]
+
+        current_cost = cost[current_node]
+        visited.add(current_node)
+
+        # exploring
+        for _dx, _dy in zip(dx, dy):
+            x, y = next_node = current_node[0] + _dx, current_node[1] + _dy
+
+            # ignore if node in closed set, or out of bounds, or not safe
+            if next_node in visited or x < 0 or y < 0 or x >= n or y >= m or grid[x, y] == 1:
+                continue
+
+            # cost if following the new path
+            tentative_cost = current_cost + euclidean(current_node, next_node)
+
+            # update if visiting a new node, or find a shorter path to an old node
+            if next_node not in cost or cost[next_node] > tentative_cost:
+                cost[next_node] = tentative_cost
+                came_from[next_node] = current_node
+                queue.put((tentative_cost + h(next_node, goal), next_node))
+             
+    print('**********************')
+    print('Failed to find a path!')
+    print('**********************') 
+
+def euclidean(position, goal_position):
+    return sum(pow(a-b,2) for a,b in zip(position, goal_position))
+```
 
 #### 6. Cull waypoints 
-For this step you can use a collinearity test or ray tracing method like Bresenham. The idea is simply to prune your path of unnecessary waypoints. Explain the code you used to accomplish this step.
+
+I use the Bresenham to identify redundant waypoints. In each step, I try to connect the current point to the further possible way point without going through any unsafe cell on the grid and eliminate all the way points in between.
+
+```python
+        # TODO: prune path to minimize number of waypoints
+        current_node = path[0]
+        prune_path = [current_node]
+
+        for i in range(1, len(path)-1):
+            if any(x<0 or x>=n or y<0 or y>=m or grid[x,y]==1 for x,y in bresenham(*current_node, *path[i+1])):
+                current_node = path[i]
+                prune_path.append(current_node)
+
+        prune_path.append(path[-1])
+```
 
 
 

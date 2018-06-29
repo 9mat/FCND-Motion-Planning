@@ -127,7 +127,7 @@ class MotionPlanning(Drone):
         with open('colliders.csv', 'r') as inputfile:
             fields = inputfile.read().strip().split(",")
             lat0 = float(fields[0].split()[1])
-            lon0 = float(fields[0].split()[1])
+            lon0 = float(fields[1].split()[1])
 
         # TODO: set home position to (lon0, lat0, 0)
         self.set_home_position(lon0, lat0, 0)
@@ -140,10 +140,6 @@ class MotionPlanning(Drone):
         
         print('global home {0}, position {1}, local position {2}'.format(self.global_home, self.global_position,
                                                                          self.local_position))
-
-        # print(local_to_global((500,300,0), self.global_home))
-        # return
-
         # Read in obstacle map
         data = np.loadtxt('colliders.csv', delimiter=',', dtype='Float64', skiprows=2)
         
@@ -158,11 +154,9 @@ class MotionPlanning(Drone):
         grid_start = (int(local_position[0]-north_offset), int(local_position[1]-east_offset))
         
         # TODO: adapt to set goal as latitude / longitude position and convert
-        # global_goal = (-122.39400598, 37.79696888, 0)
-        # local_goal = global_to_local(global_goal, self.global_home)
-        # grid_goal = (int(local_goal[0]-north_offset), int(local_goal[1] - east_offset))
-
-        grid_goal = (grid_start[0]+10, grid_start[1]+10)
+        global_goal = (-122.39400598, 37.79696888, 0)
+        local_goal = global_to_local(global_goal, self.global_home)
+        grid_goal = (int(local_goal[0]-north_offset), int(local_goal[1] - east_offset))
 
         # Run A* to find a path from start to goal
         # TODO: add diagonal motions with a cost of sqrt(2) to your A* implementation
@@ -174,21 +168,15 @@ class MotionPlanning(Drone):
         current_node = path[0]
         prune_path = [current_node]
 
-        print (path)
-
         for i in range(1, len(path)-1):
             if any(x<0 or x>=n or y<0 or y>=m or grid[x,y]==1 for x,y in bresenham(*current_node, *path[i+1])):
-                continue
-            current_node = path[i]
-            prune_path.append(current_node)
+                current_node = path[i]
+                prune_path.append(current_node)
 
         prune_path.append(path[-1])
 
-
-        # TODO (if you're feeling ambitious): Try a different approach altogether!
-
         # Convert path to waypoints
-        waypoints = [[p[0] + north_offset, p[1] + east_offset, TARGET_ALTITUDE, 0] for p in path]
+        waypoints = [[p[0] + north_offset, p[1] + east_offset, TARGET_ALTITUDE, 0] for p in prune_path]
 
         # Set self.waypoints
         self.waypoints = waypoints
